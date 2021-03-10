@@ -52,11 +52,11 @@ namespace cv { namespace cudacodec { namespace detail {
 class VideoParser
 {
 public:
-    VideoParser(VideoDecoder* videoDecoder, FrameQueue* frameQueue);
+    VideoParser(VideoDecoder* videoDecoder, FrameQueue* frameQueue, CuvidFunctions* cuvid);
 
     ~VideoParser()
     {
-        cuvidDestroyVideoParser(parser_);
+        cuvid_->cuvidDestroyVideoParser(parser_);
     }
 
     bool parseVideoData(const unsigned char* data, size_t size, bool endOfStream);
@@ -64,6 +64,7 @@ public:
     bool hasError() const { return hasError_; }
 
 private:
+    CuvidFunctions* const cuvid_;
     VideoDecoder* videoDecoder_;
     FrameQueue* frameQueue_;
     CUvideoparser parser_;

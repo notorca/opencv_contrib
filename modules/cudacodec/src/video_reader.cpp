@@ -59,10 +59,24 @@ using namespace cv::cudacodec::detail;
 
 namespace
 {
+    struct CuvidFunctionsWrapper {
+        static std::unique_ptr<CuvidFunctions, CuvidFunctionsWrapper> create() {
+            CuvidFunctions* cuvid = nullptr;
+            int ret = cuvid_load_functions(&cuvid, nullptr);
+            CV_Assert(ret == 0);
+            return std::unique_ptr<CuvidFunctions, CuvidFunctionsWrapper>(cuvid);
+        }
+        void operator()(CuvidFunctions* cuvid) const {
+            cuvid_free_functions(&cuvid);
+        }
+    };
+
+    typedef std::unique_ptr<CuvidFunctions, CuvidFunctionsWrapper> CuvidFunctionsPtr;
+
     class VideoReaderImpl : public VideoReader
     {
     public:
-        explicit VideoReaderImpl(const Ptr<VideoSource>& source);
+        explicit VideoReaderImpl(const Ptr<VideoSource>& source, CuvidFunctionsPtr cuvid);
         ~VideoReaderImpl();
 
         bool nextFrame(GpuMat& frame, Stream& stream) CV_OVERRIDE;
@@ -70,6 +84,7 @@ namespace
         FormatInfo format() const CV_OVERRIDE;
 
     private:
+        CuvidFunctionsPtr cuvid_;
         Ptr<VideoSource> videoSource_;
 
         Ptr<FrameQueue> frameQueue_;
@@ -86,7 +101,8 @@ namespace
         return videoSource_->format();
     }
 
-    VideoReaderImpl::VideoReaderImpl(const Ptr<VideoSource>& source) :
+    VideoReaderImpl::VideoReaderImpl(const Ptr<VideoSource>& source, CuvidFunctionsPtr cuvid) :
+        cuvid_(std::move(cuvid)),
         videoSource_(source),
         lock_(0)
     {
@@ -96,11 +112,11 @@ namespace
 
         CUcontext ctx;
         cuSafeCall( cuCtxGetCurrent(&ctx) );
-        cuSafeCall( cuvidCtxLockCreate(&lock_, ctx) );
+        cuSafeCall( cuvid_.get()->cuvidCtxLockCreate(&lock_, ctx) );
 
         frameQueue_.reset(new FrameQueue);
-        videoDecoder_.reset(new VideoDecoder(videoSource_->format(), ctx, lock_));
-        videoParser_.reset(new VideoParser(videoDecoder_, frameQueue_));
+        videoDecoder_.reset(new VideoDecoder(videoSource_->format(), ctx, lock_, cuvid_.get()));
+        videoParser_.reset(new VideoParser(videoDecoder_, frameQueue_, cuvid_.get()));
 
         videoSource_->setVideoParser(videoParser_);
         videoSource_->start();
@@ -115,11 +131,12 @@ namespace
     class VideoCtxAutoLock
     {
     public:
-        VideoCtxAutoLock(CUvideoctxlock lock) : m_lock(lock) { cuSafeCall( cuvidCtxLock(m_lock, 0) ); }
-        ~VideoCtxAutoLock() { cuvidCtxUnlock(m_lock, 0); }
+        VideoCtxAutoLock(CUvideoctxlock lock, CuvidFunctions *cuvid) : cuvid_(cuvid), m_lock(lock) { cuSafeCall( cuvid_->cuvidCtxLock(m_lock, 0) ); }
+        ~VideoCtxAutoLock() { cuvid_->cuvidCtxUnlock(m_lock, 0); }
 
     private:
         CUvideoctxlock m_lock;
+        CuvidFunctions* const cuvid_;
     };
 
     bool VideoReaderImpl::nextFrame(GpuMat& frame, Stream& stream)
@@ -170,7 +187,7 @@ namespace
         frames_.pop_front();
 
         {
-            VideoCtxAutoLock autoLock(lock_);
+            VideoCtxAutoLock autoLock(lock_, cuvid_.get());
 
             // map decoded video frame to CUDA surface
             GpuMat decodedFrame = videoDecoder_->mapFrame(frameInfo.first.picture_index, frameInfo.second);
@@ -196,6 +213,7 @@ Ptr<VideoReader> cv::cudacodec::createVideoReader(const String& filename)
 {
     CV_Assert( !filename.empty() );
 
+    CuvidFunctionsPtr cuvid = CuvidFunctionsWrapper::create();
     Ptr<VideoSource> videoSource;
 
     try
@@ -206,16 +224,16 @@ Ptr<VideoReader> cv::cudacodec::createVideoReader(const String& filename)
     }
     catch (...)
     {
-        videoSource.reset(new CuvidVideoSource(filename));
+        videoSource.reset(new CuvidVideoSource(filename, cuvid.get()));
     }
 
-    return makePtr<VideoReaderImpl>(videoSource);
+    return Ptr<VideoReader>(new VideoReaderImpl(videoSource, std::move(cuvid)));
 }
 
 Ptr<VideoReader> cv::cudacodec::createVideoReader(const Ptr<RawVideoSource>& source)
 {
     Ptr<VideoSource> videoSource(new RawVideoSourceWrapper(source));
-    return makePtr<VideoReaderImpl>(videoSource);
+    return Ptr<VideoReader>(new VideoReaderImpl(videoSource, CuvidFunctionsWrapper::create()));
 }
 
 #endif // HAVE_NVCUVID

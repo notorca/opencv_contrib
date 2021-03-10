@@ -51,7 +51,7 @@ namespace cv { namespace cudacodec { namespace detail {
 class CuvidVideoSource : public VideoSource
 {
 public:
-    explicit CuvidVideoSource(const String& fname);
+    explicit CuvidVideoSource(const String& fname, CuvidFunctions* cuvid);
     ~CuvidVideoSource();
 
     FormatInfo format() const CV_OVERRIDE;
@@ -73,6 +73,7 @@ private:
     //
     static int CUDAAPI HandleVideoData(void* pUserData, CUVIDSOURCEDATAPACKET* pPacket);
 
+    CuvidFunctions* const cuvid_;
     CUvideosource videoSource_;
     FormatInfo format_;
 };

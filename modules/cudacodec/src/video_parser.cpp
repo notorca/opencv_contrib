@@ -45,8 +45,8 @@
 
 #ifdef HAVE_NVCUVID
 
-cv::cudacodec::detail::VideoParser::VideoParser(VideoDecoder* videoDecoder, FrameQueue* frameQueue) :
-    videoDecoder_(videoDecoder), frameQueue_(frameQueue), unparsedPackets_(0), hasError_(false)
+cv::cudacodec::detail::VideoParser::VideoParser(VideoDecoder* videoDecoder, FrameQueue* frameQueue, CuvidFunctions* cuvid) :
+    cuvid_(cuvid), videoDecoder_(videoDecoder), frameQueue_(frameQueue), unparsedPackets_(0), hasError_(false)
 {
     CUVIDPARSERPARAMS params;
     std::memset(&params, 0, sizeof(CUVIDPARSERPARAMS));
@@ -59,7 +59,7 @@ cv::cudacodec::detail::VideoParser::VideoParser(VideoDecoder* videoDecoder, Fram
     params.pfnDecodePicture       = HandlePictureDecode;    // Called when a picture is ready to be decoded (decode order)
     params.pfnDisplayPicture      = HandlePictureDisplay;   // Called whenever a picture is ready to be displayed (display order)
 
-    cuSafeCall( cuvidCreateVideoParser(&parser_, &params) );
+    cuSafeCall( cuvid_->cuvidCreateVideoParser(&parser_, &params) );
 }
 
 bool cv::cudacodec::detail::VideoParser::parseVideoData(const unsigned char* data, size_t size, bool endOfStream)
@@ -73,7 +73,7 @@ bool cv::cudacodec::detail::VideoParser::parseVideoData(const unsigned char* dat
     packet.payload_size = static_cast<unsigned long>(size);
     packet.payload = data;
 
-    if (cuvidParseVideoData(parser_, &packet) != CUDA_SUCCESS)
+    if (cuvid_->cuvidParseVideoData(parser_, &packet) != CUDA_SUCCESS)
     {
         hasError_ = true;
         frameQueue_->endDecode();

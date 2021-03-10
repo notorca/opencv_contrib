@@ -49,7 +49,8 @@ namespace cv { namespace cudacodec { namespace detail {
 class VideoDecoder
 {
 public:
-    VideoDecoder(const FormatInfo& videoFormat, CUcontext ctx, CUvideoctxlock lock) : ctx_(ctx), lock_(lock), decoder_(0)
+
+    VideoDecoder(const FormatInfo& videoFormat, CUcontext ctx, CUvideoctxlock lock, CuvidFunctions* cuvid) : ctx_(ctx), lock_(lock), cuvid_(cuvid), decoder_(0)
     {
         create(videoFormat);
     }
@@ -77,7 +78,7 @@ public:
 
     bool decodePicture(CUVIDPICPARAMS* picParams)
     {
-        return cuvidDecodePicture(decoder_, picParams) == CUDA_SUCCESS;
+        return cuvid_->cuvidDecodePicture(decoder_, picParams) == CUDA_SUCCESS;
     }
 
     cuda::GpuMat mapFrame(int picIdx, CUVIDPROCPARAMS& videoProcParams)
@@ -85,7 +86,7 @@ public:
         CUdeviceptr ptr;
         unsigned int pitch;
 
-        cuSafeCall( cuvidMapVideoFrame(decoder_, picIdx, &ptr, &pitch, &videoProcParams) );
+        cuSafeCall( cuvid_->cuvidMapVideoFrame(decoder_, picIdx, &ptr, &pitch, &videoProcParams) );
 
 
         return cuda::GpuMat(targetHeight() * 3 / 2, targetWidth(), CV_8UC1, (void*) ptr, pitch);
@@ -93,13 +94,14 @@ public:
 
     void unmapFrame(cuda::GpuMat& frame)
     {
-        cuSafeCall( cuvidUnmapVideoFrame(decoder_, (CUdeviceptr) frame.data) );
+        cuSafeCall( cuvid_->cuvidUnmapVideoFrame(decoder_, (CUdeviceptr) frame.data) );
         frame.release();
     }
 
 private:
-    CUvideoctxlock lock_;
     CUcontext ctx_;
+    CUvideoctxlock lock_;
+    CuvidFunctions* const cuvid_;
     CUVIDDECODECREATEINFO createInfo_;
     CUvideodecoder        decoder_;
 };

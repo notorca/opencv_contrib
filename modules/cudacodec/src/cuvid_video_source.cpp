@@ -49,7 +49,7 @@ using namespace cv;
 using namespace cv::cudacodec;
 using namespace cv::cudacodec::detail;
 
-cv::cudacodec::detail::CuvidVideoSource::CuvidVideoSource(const String& fname)
+cv::cudacodec::detail::CuvidVideoSource::CuvidVideoSource(const String& fname, CuvidFunctions* cuvid) : cuvid_(cuvid)
 {
     CUVIDSOURCEPARAMS params;
     std::memset(&params, 0, sizeof(CUVIDSOURCEPARAMS));
@@ -60,13 +60,13 @@ cv::cudacodec::detail::CuvidVideoSource::CuvidVideoSource(const String& fname)
     params.pfnAudioDataHandler = 0;
 
     // now create the actual source
-    CUresult cuRes = cuvidCreateVideoSource(&videoSource_, fname.c_str(), &params);
+    CUresult cuRes = cuvid_->cuvidCreateVideoSource(&videoSource_, fname.c_str(), &params);
     if (cuRes == CUDA_ERROR_INVALID_SOURCE)
         CV_Error(Error::StsUnsupportedFormat, "Unsupported video source");
     cuSafeCall( cuRes );
 
     CUVIDEOFORMAT vidfmt;
-    cuSafeCall( cuvidGetSourceVideoFormat(videoSource_, &vidfmt, 0) );
+    cuSafeCall( cuvid_->cuvidGetSourceVideoFormat(videoSource_, &vidfmt, 0) );
 
     CV_Assert(Codec::NumCodecs == cudaVideoCodec::cudaVideoCodec_NumCodecs);
     format_.codec = static_cast<Codec>(vidfmt.codec);
@@ -78,7 +78,7 @@ cv::cudacodec::detail::CuvidVideoSource::CuvidVideoSource(const String& fname)
 
 cv::cudacodec::detail::CuvidVideoSource::~CuvidVideoSource()
 {
-    cuvidDestroyVideoSource(videoSource_);
+    cuvid_->cuvidDestroyVideoSource(videoSource_);
 }
 
 FormatInfo cv::cudacodec::detail::CuvidVideoSource::format() const
@@ -88,22 +88,22 @@ FormatInfo cv::cudacodec::detail::CuvidVideoSource::format() const
 
 void cv::cudacodec::detail::CuvidVideoSource::start()
 {
-    cuSafeCall( cuvidSetVideoSourceState(videoSource_, cudaVideoState_Started) );
+    cuSafeCall( cuvid_->cuvidSetVideoSourceState(videoSource_, cudaVideoState_Started) );
 }
 
 void cv::cudacodec::detail::CuvidVideoSource::stop()
 {
-    cuSafeCall( cuvidSetVideoSourceState(videoSource_, cudaVideoState_Stopped) );
+    cuSafeCall( cuvid_->cuvidSetVideoSourceState(videoSource_, cudaVideoState_Stopped) );
 }
 
 bool cv::cudacodec::detail::CuvidVideoSource::isStarted() const
 {
-    return (cuvidGetVideoSourceState(videoSource_) == cudaVideoState_Started);
+    return (cuvid_->cuvidGetVideoSourceState(videoSource_) == cudaVideoState_Started);
 }
 
 bool cv::cudacodec::detail::CuvidVideoSource::hasError() const
 {
-    return (cuvidGetVideoSourceState(videoSource_) == cudaVideoState_Error);
+    return (cuvid_->cuvidGetVideoSourceState(videoSource_) == cudaVideoState_Error);
 }
 
 int CUDAAPI cv::cudacodec::detail::CuvidVideoSource::HandleVideoData(void* userData, CUVIDSOURCEDATAPACKET* packet)

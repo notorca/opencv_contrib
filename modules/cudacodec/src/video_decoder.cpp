@@ -96,7 +96,7 @@ void cv::cudacodec::detail::VideoDecoder::create(const FormatInfo& videoFormat)
     decodeCaps.eChromaFormat = _chromaFormat;
     decodeCaps.nBitDepthMinus8 = videoFormat.nBitDepthMinus8;
     cuSafeCall(cuCtxPushCurrent(ctx_));
-    cuSafeCall(cuvidGetDecoderCaps(&decodeCaps));
+    cuSafeCall(cuvid_->cuvidGetDecoderCaps(&decodeCaps));
     cuSafeCall(cuCtxPopCurrent(NULL));
     if (!decodeCaps.bIsSupported)
         CV_Error(Error::StsUnsupportedFormat, "Video source is not supported by hardware video decoder");
@@ -131,7 +131,7 @@ void cv::cudacodec::detail::VideoDecoder::create(const FormatInfo& videoFormat)
     createInfo_.vidLock = lock_;
 
     cuSafeCall(cuCtxPushCurrent(ctx_));
-    cuSafeCall(cuvidCreateDecoder(&decoder_, &createInfo_));
+    cuSafeCall(cuvid_->cuvidCreateDecoder(&decoder_, &createInfo_));
     cuSafeCall(cuCtxPopCurrent(NULL));
 }
 
@@ -139,7 +139,7 @@ void cv::cudacodec::detail::VideoDecoder::release()
 {
     if (decoder_)
     {
-        cuvidDestroyDecoder(decoder_);
+        cuvid_->cuvidDestroyDecoder(decoder_);
         decoder_ = 0;
     }
 }

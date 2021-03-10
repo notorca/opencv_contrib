@@ -60,6 +60,7 @@
 #ifdef HAVE_NVCUVID
     #if defined(HAVE_DYNLINK_NVCUVID_HEADER)
         #include <dynlink_nvcuvid.h>
+        #include <dynlink_loader.h>
     #elif defined(HAVE_NVCUVID_HEADER)
         #include <nvcuvid.h>
     #endif
